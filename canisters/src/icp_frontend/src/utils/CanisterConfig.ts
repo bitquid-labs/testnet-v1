@@ -1,9 +1,9 @@
 import { Actor, HttpAgent } from '@dfinity/agent';
 import { idlFactory } from '../icp_backend';
 
-const canisterId = 'cdbdu-2qaaa-aaaah-qp6ca-cai';
+const canisterId = '4v75z-qqaaa-aaaaj-az5ta-cai';
 // const localHost = "http://127.0.0.1:4943";
-const icHost = "https://ceafa-xiaaa-aaaah-qp6cq-cai.icp0.io/"; 
+const icHost = "https://4s63n-5iaaa-aaaaj-az5tq-cai.icp0.io/"; 
 
 export const createActor = async () => {
   try {

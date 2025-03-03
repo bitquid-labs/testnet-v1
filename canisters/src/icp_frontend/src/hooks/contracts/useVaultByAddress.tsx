@@ -24,6 +24,7 @@ export const useVaultByAddress = (address: string) => {
 
   useEffect(() => {
     refetch();
+    console.log("vaults by address", vaults);
   }, [blockNumber]);
 
   if (!vaults)
