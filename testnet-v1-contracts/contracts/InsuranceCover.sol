@@ -10,26 +10,10 @@ import "./CoverLib.sol";
 interface IbqBTC {
     function bqMint(address account, uint256 amount) external;
     function burn(address account, uint256 amount) external;
-    function transferFrom(
-        address from,
-        address to,
-        uint256 amount
-    ) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
 }
 
 interface ILP {
-    struct Deposits {
-        address lp;
-        uint256 amount;
-        uint256 poolId;
-        uint256 dailyPayout;
-        Status status;
-        uint256 daysLeft;
-        uint256 startDate;
-        uint256 expiryDate;
-        uint256 accruedPayout;
-    }
-
     struct Pool {
         uint256 id;
         string poolName;
@@ -58,42 +42,20 @@ interface ILP {
         ERC20
     }
 
-    function getUserDeposit(
-        uint256 _poolId,
-        address _user
-    ) external view returns (Deposits memory);
+    function getUserPoolDeposit(uint256 _poolId, address _user) external view returns (CoverLib.Deposits memory);
 
-    function getVaultDeposits(
-        uint256 vaultId,
-        address user
-    ) external view returns (Deposits[] memory);
-
-    function getPool(
-        uint256 _poolId
-    )
+    function getUserVaultPoolDeposits(uint256 vaultId, address user)
         external
         view
-        returns (CoverLib.Pool memory);
+        returns (CoverLib.Deposits[] memory);
 
-    function reducePercentageSplit(
-        uint256 _poolId,
-        uint256 __poolPercentageSplit
-    ) external;
-    function increasePercentageSplit(
-        uint256 _poolId,
-        uint256 __poolPercentageSplit
-    ) external;
-    function addPoolCover(
-        uint256 _poolId,
-        CoverLib.Cover memory _cover
-    ) external;
-    function updatePoolCovers(
-        uint256 _poolId,
-        CoverLib.Cover memory _cover
-    ) external;
-    function getPoolCovers(
-        uint256 _poolId
-    ) external view returns (CoverLib.Cover[] memory);
+    function getPool(uint256 _poolId) external view returns (CoverLib.Pool memory);
+
+    function reducePercentageSplit(uint256 _poolId, uint256 __poolPercentageSplit) external;
+    function increasePercentageSplit(uint256 _poolId, uint256 __poolPercentageSplit) external;
+    function addPoolCover(uint256 _poolId, CoverLib.Cover memory _cover) external;
+    function updatePoolCovers(uint256 _poolId, CoverLib.Cover memory _cover) external;
+    function getPoolCovers(uint256 _poolId) external view returns (CoverLib.Cover[] memory);
 }
 
 contract InsuranceCover is ReentrancyGuard, Ownable {
@@ -111,7 +73,7 @@ contract InsuranceCover is ReentrancyGuard, Ownable {
     error UnsupportedCoverType();
     error WrongPool();
 
-    uint public coverFeeBalance;
+    uint256 public coverFeeBalance;
     ILP public lpContract;
     IbqBTC public bqBTC;
     address public bqBTCAddress;
@@ -124,40 +86,18 @@ contract InsuranceCover is ReentrancyGuard, Ownable {
     mapping(address => mapping(uint256 => uint256)) public NextLpClaimTime;
     mapping(address => mapping(uint256 => uint256)) public LastVaultClaimTime;
 
-    mapping(address => mapping(uint256 => CoverLib.GenericCoverInfo))
-        public userCovers;
+    mapping(address => mapping(uint256 => CoverLib.GenericCoverInfo)) public userCovers;
     mapping(uint256 => CoverLib.Cover) public covers;
 
     uint256 public coverCount;
     uint256[] public coverIds;
 
-    event CoverCreated(
-        uint256 indexed coverId,
-        string name,
-        CoverLib.RiskType riskType
-    );
-    event CoverPurchased(
-        address indexed user,
-        uint256 coverValue,
-        uint256 coverFee,
-        CoverLib.RiskType riskType
-    );
-    event PayoutClaimed(
-        address indexed user,
-        uint256 indexed poolId,
-        uint256 amount
-    );
-    event CoverUpdated(
-        uint256 indexed coverId,
-        string coverName,
-        CoverLib.RiskType riskType
-    );
+    event CoverCreated(uint256 indexed coverId, string name, CoverLib.RiskType riskType);
+    event CoverPurchased(address indexed user, uint256 coverValue, uint256 coverFee, CoverLib.RiskType riskType);
+    event PayoutClaimed(address indexed user, uint256 indexed poolId, uint256 amount);
+    event CoverUpdated(uint256 indexed coverId, string coverName, CoverLib.RiskType riskType);
 
-    constructor(
-        address _lpContract,
-        address _initialOwner,
-        address _bqBTC
-    ) Ownable(_initialOwner) {
+    constructor(address _lpContract, address _initialOwner, address _bqBTC) Ownable(_initialOwner) {
         lpContract = ILP(_lpContract);
         lpAddress = _lpContract;
         bqBTC = IbqBTC(_bqBTC);
@@ -173,12 +113,8 @@ contract InsuranceCover is ReentrancyGuard, Ownable {
         uint256 _capacity,
         uint256 _poolId
     ) public onlyOwner {
-        (uint256 _maxAmount, address _asset, CoverLib.AssetDepositType _adt) = _validateAndGetPoolInfo(
-            _coverName,
-            _poolId,
-            _riskType,
-            _capacity
-        );
+        (uint256 _maxAmount, address _asset, CoverLib.AssetDepositType _adt) =
+            _validateAndGetPoolInfo(_coverName, _poolId, _riskType, _capacity);
 
         lpContract.reducePercentageSplit(_poolId, _capacity);
 
@@ -213,10 +149,7 @@ contract InsuranceCover is ReentrancyGuard, Ownable {
     ) internal view returns (uint256, address, CoverLib.AssetDepositType) {
         CoverLib.Cover[] memory coversInPool = lpContract.getPoolCovers(poolId);
         for (uint256 i = 0; i < coversInPool.length; i++) {
-            if (
-                keccak256(abi.encodePacked(coversInPool[i].coverName)) ==
-                keccak256(abi.encodePacked(_coverName))
-            ) {
+            if (keccak256(abi.encodePacked(coversInPool[i].coverName)) == keccak256(abi.encodePacked(_coverName))) {
                 revert NameAlreadyExists();
             }
         }
@@ -253,14 +186,11 @@ contract InsuranceCover is ReentrancyGuard, Ownable {
             revert WrongPool();
         }
 
-        CoverLib.Cover[] memory coversInPool = lpContract.getPoolCovers(
-            _poolId
-        );
+        CoverLib.Cover[] memory coversInPool = lpContract.getPoolCovers(_poolId);
         for (uint256 i = 0; i < coversInPool.length; i++) {
             if (
-                keccak256(abi.encodePacked(coversInPool[i].coverName)) ==
-                keccak256(abi.encodePacked(_coverName)) &&
-                coversInPool[i].id != _coverId
+                keccak256(abi.encodePacked(coversInPool[i].coverName)) == keccak256(abi.encodePacked(_coverName))
+                    && coversInPool[i].id != _coverId
             ) {
                 revert NameAlreadyExists();
             }
@@ -289,13 +219,12 @@ contract InsuranceCover is ReentrancyGuard, Ownable {
         emit CoverUpdated(_coverId, _coverName, _riskType);
     }
 
-    function purchaseCover(
-        uint256 _coverId,
-        uint256 _coverValue,
-        uint256 _coverPeriod,
-        uint256 _coverFee
-    ) public nonReentrant {
-        if (_coverFee <= 0) {
+    function purchaseCover(uint256 _coverId, uint256 _coverValue, uint256 _coverPeriod, uint256 _coverFee)
+        public
+        payable
+        nonReentrant
+    {
+        if (_coverFee <= 0 && msg.value <= 0) {
             revert InvalidAmount();
         }
         if (_coverPeriod <= 27 || _coverPeriod >= 366) {
@@ -317,15 +246,18 @@ contract InsuranceCover is ReentrancyGuard, Ownable {
             revert InsufficientPoolBalance();
         }
 
-        bqBTC.burn(msg.sender, _coverFee);
+        if (cover.asset == bqBTCAddress) {
+            if (msg.value > 0) {
+                revert InvalidAmount();
+            }
+            bqBTC.burn(msg.sender, _coverFee);
+        }
 
         cover.coverValues = newCoverValues;
         cover.maxAmount = cover.capacityAmount - newCoverValues;
 
         cover.maxAmount = (cover.capacityAmount - cover.coverValues);
-        CoverLib.GenericCoverInfo storage userCover = userCovers[msg.sender][
-            _coverId
-        ];
+        CoverLib.GenericCoverInfo storage userCover = userCovers[msg.sender][_coverId];
 
         if (userCover.coverValue == 0) {
             userCovers[msg.sender][_coverId] = CoverLib.GenericCoverInfo({
@@ -344,7 +276,7 @@ contract InsuranceCover is ReentrancyGuard, Ownable {
         }
 
         bool userExists = false;
-        for (uint i = 0; i < participants.length; i++) {
+        for (uint256 i = 0; i < participants.length; i++) {
             if (participants[i] == msg.sender) {
                 userExists = true;
                 break;
@@ -357,13 +289,14 @@ contract InsuranceCover is ReentrancyGuard, Ownable {
         participation[msg.sender] += 1;
 
         coverFeeBalance += _coverFee;
+        if (cover.asset == bqBTCAddress) {
+            _coverFee = msg.value;
+        }
 
         emit CoverPurchased(msg.sender, _coverValue, _coverFee, cover.riskType);
     }
 
-    function getAllUserCovers(
-        address user
-    ) external view returns (CoverLib.GenericCoverInfo[] memory) {
+    function getAllUserCovers(address user) external view returns (CoverLib.GenericCoverInfo[] memory) {
         uint256 actualCount = 0;
         for (uint256 i = 0; i < coverIds.length; i++) {
             uint256 id = coverIds[i];
@@ -372,8 +305,7 @@ contract InsuranceCover is ReentrancyGuard, Ownable {
             }
         }
 
-        CoverLib.GenericCoverInfo[]
-            memory userCoverList = new CoverLib.GenericCoverInfo[](actualCount);
+        CoverLib.GenericCoverInfo[] memory userCoverList = new CoverLib.GenericCoverInfo[](actualCount);
 
         uint256 index = 0;
         for (uint256 i = 0; i < coverIds.length; i++) {
@@ -387,11 +319,7 @@ contract InsuranceCover is ReentrancyGuard, Ownable {
         return userCoverList;
     }
 
-    function getAllAvailableCovers()
-        external
-        view
-        returns (CoverLib.Cover[] memory)
-    {
+    function getAllAvailableCovers() external view returns (CoverLib.Cover[] memory) {
         uint256 actualCount = 0;
         for (uint256 i = 0; i < coverIds.length; i++) {
             uint256 id = coverIds[i];
@@ -400,9 +328,7 @@ contract InsuranceCover is ReentrancyGuard, Ownable {
             }
         }
 
-        CoverLib.Cover[] memory availableCovers = new CoverLib.Cover[](
-            actualCount
-        );
+        CoverLib.Cover[] memory availableCovers = new CoverLib.Cover[](actualCount);
 
         uint256 index = 0;
         for (uint256 i = 0; i < coverIds.length; i++) {
@@ -416,24 +342,23 @@ contract InsuranceCover is ReentrancyGuard, Ownable {
         return availableCovers;
     }
 
-    function getCoverInfo(
-        uint256 _coverId
-    ) external view returns (CoverLib.Cover memory) {
+    function getCoverInfo(uint256 _coverId) external view returns (CoverLib.Cover memory) {
         return covers[_coverId];
     }
 
-    function getUserCoverInfo(
-        address user,
-        uint256 _coverId
-    ) external view returns (CoverLib.GenericCoverInfo memory) {
+    function getUserCoverInfo(address user, uint256 _coverId)
+        external
+        view
+        returns (CoverLib.GenericCoverInfo memory)
+    {
         return userCovers[user][_coverId];
     }
 
-    function updateUserCoverValue(
-        address user,
-        uint256 _coverId,
-        uint256 _claimPaid
-    ) public onlyGovernance nonReentrant {
+    function updateUserCoverValue(address user, uint256 _coverId, uint256 _claimPaid)
+        public
+        onlyGovernance
+        nonReentrant
+    {
         userCovers[user][_coverId].coverValue -= _claimPaid;
         userCovers[user][_coverId].claimPaid += _claimPaid;
     }
@@ -459,16 +384,12 @@ contract InsuranceCover is ReentrancyGuard, Ownable {
         require(cover.capacity > 0, "Invalid cover capacity");
         uint256 amount = (pool.totalUnit * cover.capacity) / 100;
         covers[_coverId].capacityAmount = amount;
-        covers[_coverId].maxAmount = (covers[_coverId].capacityAmount -
-            covers[_coverId].coverValues);
+        covers[_coverId].maxAmount = (covers[_coverId].capacityAmount - covers[_coverId].coverValues);
     }
 
     function claimPayoutForLP(uint256 _poolId) external nonReentrant {
-        ILP.Deposits memory depositInfo = lpContract.getUserDeposit(
-            _poolId,
-            msg.sender
-        );
-        if (depositInfo.status != ILP.Status.Active) {
+        CoverLib.Deposits memory depositInfo = lpContract.getUserPoolDeposit(_poolId, msg.sender);
+        if (depositInfo.status != CoverLib.Status.Active) {
             revert LpNotActive();
         }
 
@@ -504,10 +425,7 @@ contract InsuranceCover is ReentrancyGuard, Ownable {
     }
 
     function clamPayoutForVault(uint256 vaultId) external nonReentrant {
-        ILP.Deposits[] memory deposits = lpContract.getVaultDeposits(
-            vaultId,
-            msg.sender
-        );
+        CoverLib.Deposits[] memory deposits = lpContract.getUserVaultPoolDeposits(vaultId, msg.sender);
         uint256 totalClaim;
         uint256 lastClaimTime;
         if (LastVaultClaimTime[msg.sender][vaultId] == 0) {
@@ -523,7 +441,7 @@ contract InsuranceCover is ReentrancyGuard, Ownable {
         uint256 claimableDays = (currentTime - lastClaimTime) / 5 minutes;
 
         for (uint256 i = 0; i < deposits.length; i++) {
-            ILP.Deposits memory deposit = deposits[i];
+            CoverLib.Deposits memory deposit = deposits[i];
             uint256 claimableAmount = deposit.dailyPayout * claimableDays;
             totalClaim += claimableAmount;
         }
@@ -536,14 +454,8 @@ contract InsuranceCover is ReentrancyGuard, Ownable {
         emit PayoutClaimed(msg.sender, vaultId, totalClaim);
     }
 
-    function getDepositClaimableDays(
-        address user,
-        uint256 _poolId
-    ) public view returns (uint256) {
-        ILP.Deposits memory depositInfo = lpContract.getUserDeposit(
-            _poolId,
-            user
-        );
+    function getDepositClaimableDays(address user, uint256 _poolId) public view returns (uint256) {
+        CoverLib.Deposits memory depositInfo = lpContract.getUserPoolDeposit(_poolId, user);
 
         uint256 lastClaimTime;
         if (NextLpClaimTime[user][_poolId] == 0) {
@@ -560,10 +472,7 @@ contract InsuranceCover is ReentrancyGuard, Ownable {
         return claimableDays;
     }
 
-    function getLastClaimTime(
-        address user,
-        uint256 _poolId
-    ) public view returns (uint256) {
+    function getLastClaimTime(address user, uint256 _poolId) public view returns (uint256) {
         return NextLpClaimTime[user][_poolId];
     }
 

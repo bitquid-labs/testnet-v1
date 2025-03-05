@@ -9,7 +9,7 @@ import { useERC20TokenApprovedTokenAmount } from "hooks/contracts/useTokenApprov
 import { useVault } from "hooks/contracts/useVault";
 import { bnToNumber, numberToBN } from "lib/number";
 import { ChainType } from "lib/wagmi";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useParams } from "react-router";
 import { ADT } from "types/common";
 import { Address, erc20Abi, formatEther, formatUnits, parseUnits } from "viem";
@@ -22,6 +22,7 @@ import Button from "components/common/Button";
 import { getPoolRiskTypeName } from "lib/utils";
 import bqBTCImg from "assets/images/bqbtc.svg";
 import bnb from "assets/icons/bnb-logo.png";
+import merlinLogo from 'assets/icons/merlin-logo.jpeg';
 
 type Props = {
   id: number;
@@ -35,12 +36,38 @@ const VaultDetail: React.FC<Props> = ({ id }) => {
   const [loadingMessage, setLoadingMessage] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const { callContractFunction } = useCallContract();
+  const [avgApy, setAvgApy] = useState<number>(0);
+
+  const chainNickname = (chain as any)?.chainNickName || "bscTest";
+
+  const getAssetLogo = () => {
+    if (assetType === ADT.Native) {
+      if (chainNickname === "merlin") {
+        return merlinLogo;
+      } else if (chainNickname === "bscTest") {
+        return bnb; 
+      }
+    }
+    return bqBTCImg; 
+  };
 
   const vaultData = useVault(id);
   const tvl = useVaultTVL(id);
 
   console.log("vault detail:", vaultData);
   const userDeposit = useVaultDeposit(id);
+
+  // Calculate average APY effect
+  useEffect(() => {
+    if (vaultData && typeof vaultData === 'object' && 'pools' in vaultData && Array.isArray(vaultData.pools)) {
+      const totalApy = vaultData.pools.reduce((sum, pool) => sum + Number(pool.apy || 0), 0);
+      const avgApy = totalApy / vaultData.pools.length;
+      setAvgApy(avgApy);
+      console.log(`Average APY for vault ${id}:`, avgApy);
+    } else {
+      console.log(`No pools found in vault ${id}.`);
+    }
+  }, [vaultData, id]);
 
   const assetType = useMemo(() => {
     if (vaultData) {
@@ -76,6 +103,7 @@ const VaultDetail: React.FC<Props> = ({ id }) => {
     const params = [
       Number(id), // vaultId
       parseUnits(amount, 18), // amount
+      vaultData?.minPeriod || 0, // period
     ];
 
     console.log("params:", params);
@@ -265,7 +293,7 @@ const VaultDetail: React.FC<Props> = ({ id }) => {
             </div>
             <div className="relative z-[10]">
               <span className="font-[700] text-48">
-                {Number(vaultData?.apy || 0n)} %
+                {avgApy.toFixed(0)} %
               </span>
               <span className="ml-8 text-19">APY</span>
             </div>
@@ -277,7 +305,8 @@ const VaultDetail: React.FC<Props> = ({ id }) => {
                 <div className="flex items-center justify-center overflow-hidden rounded-full w-27 h-27">
                   <img
                     className="w-full"
-                    src={assetType === ADT.Native ? bnb : bqBTCImg}
+                    // src={assetType === ADT.Native ? bnb : bqBTCImg}
+                    src={getAssetLogo()}
                     alt=""
                   />
                 </div>
