@@ -21,8 +21,20 @@ BQ Labs v1 Testnet contract leverages the use of ICP's technologies to enable se
 - **Liquid Insurance Tokens (LITs) :**
   The use of LITs on the individual networks to represent users staked/ deposited assets
 
-- ICP canister URL :
-  icp_backend: https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io/?id=lpi4p-cqaaa-aaaal-qsgaa-cai
+## ICP Chain Fusion
+
+BQ Labs Testnet-v1 heavily relies on ICP Chain Fusion technology, enabling bridgeless, decentralized, bi-directional communication between ICP and other networks. Additionally, BQ Labs leverages Chain Fusion’s capability of allowing ICP canisters to generate signatures and submit transactions on external chains. This makes the canisters a unified base layer for a cross-chain insurance protocol.
+
+## Usage
+
+Interact with the protocol to purchase covers, deposit into the liquidity pools and vaults for my diversified investments: https://icp-bq.netlify.app/
+
+## Canister URLS
+
+- **Frontend canister via browser**
+  icp_frontend: https://4s63n-5iaaa-aaaaj-az5tq-cai.icp0.io/
+- **Backend canister via Candid interface**:
+  icp_backend: https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io/?id=4v75z-qqaaa-aaaaj-az5ta-cai
 
 ## Running the Project
 
@@ -53,3 +65,7 @@ pnpm run dev
 ```
 
 - [Frontend Integration](https://github.com/bitquid-labs/testnet-v1/blob/main/canisters/README.md#frontend-integration)
+
+## LICENSE
+
+This project is licensed under the MIT license, see LICENSE.md for details.
